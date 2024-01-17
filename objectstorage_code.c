@@ -1,7 +1,7 @@
 /*
 Implementing Object Storage-Put,Get,List
 */
-#include <mysql/mysql.h>
+//#include <mysql/mysql.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,12 +12,12 @@ Implementing Object Storage-Put,Get,List
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <openssl/md5.h>
-#include "/home/yashgajalwar/Desktop/isa-l-master/include/erasure_code.h"
+#include "/home/yashgajalwar/Desktop/erasure/isa-l-master/include/erasure_code.h"
 
 #define NUM_DATA 8
 #define NUM_PARITY 3
 #define BUCKETSIZE 5
-#define DIRECTORY_PATH "/home/yashgajalwar/Desktop/test/"
+#define DIRECTORY_PATH "/home/yashgajalwar/Desktop/erasure/test/"
 
 struct Node
 {
@@ -52,7 +52,7 @@ struct uid_filemap
 int generateUid();
 void menu(char[]);
 int put(struct Node **,char[]);
-int get(int,char *,char *);
+int get(int,char *,char *,int*,unsigned char **);
 int isDir(const char *);
 int putHash(struct Node **,int,char [],int, char *);
 void display(struct Node*);
@@ -73,6 +73,7 @@ unsigned char g_tbls[(NUM_DATA + NUM_PARITY) * (NUM_DATA + NUM_PARITY) * 32]; //
 unsigned char *databuffs; //databufs to be allocated using calloc as per file size
 unsigned char *paritybuffs[NUM_PARITY];	//parities calculated will be stored here
 unsigned char *datachunks[NUM_DATA]; //data from the chunk files will be stored here
+int count=0;
 
 int main(void)
 {	
@@ -139,7 +140,8 @@ int main(void)
 			}
 		}
 		else if(strcasecmp(currentstring, "Get") == 0)
-		{
+		{	
+
 			flag =0;
 			char uid_f[50]="\0";
 			
@@ -175,8 +177,22 @@ int main(void)
 			}
 			targetFilePath[q+1] = '\0';
 
+
+
+			int container_index[NUM_DATA+NUM_PARITY];
+			for(int cnt=0;cnt<(NUM_DATA+NUM_PARITY);cnt++){
+				container_index[cnt]=0;
+			}
+			int chunk_size = d.uid;
+			unsigned char *container[NUM_DATA+NUM_PARITY];
+			for(int cnt=0; cnt<(NUM_DATA+NUM_PARITY); cnt++)
+			{
+				container[cnt]=(unsigned char *)calloc(chunk_size, sizeof(unsigned char));
+			}
+
+
 			
-			succ=get(uid,targetFilePath,uid_f);
+			succ=get(uid,targetFilePath,uid_f,container_index,container);
 
 			flag = search(uid_f,&d);
 			
@@ -207,7 +223,8 @@ int main(void)
 				{
 					printf("\n\tChecksum verification failed! \n");
 					succ = -1;
-					remove(targetFilePath);
+					//uncomment this after use
+					// remove(targetFilePath);
 				}
 			}
 			if(succ==0)
@@ -257,8 +274,15 @@ void menu(char choice[100])
 	
 }
 
-int get(int uid,char *targetFilePath,char * uid_f)
+int get(int uid,char *targetFilePath,char * uid_f,int *container_index,unsigned char **container)
 {	
+	printf("\nGet Function Starts here\n");
+	count++;
+	printf("get recursive count is %d",count);
+	if(count>3){
+		return -1;
+	}
+
 	FILE *fchunk=NULL;
 	FILE *ft = NULL;	
 	int succ=0;
@@ -299,6 +323,12 @@ int get(int uid,char *targetFilePath,char * uid_f)
 	char *hash_ChunkOriginal = NULL;
 	char *hash_ChunkRegen = NULL;
 	struct Node *temp = arr[uid % BUCKETSIZE];	
+
+	printf("\nContainers:");
+	for(int i=0;i<(NUM_DATA + NUM_PARITY);++i){
+		printf("%d\t",container_index[i]);
+	}
+	printf("\n");
 
 	for(i = 0 ; i < NUM_PARITY ; ++i)
 	{
@@ -379,9 +409,7 @@ int get(int uid,char *targetFilePath,char * uid_f)
 		{
 			if(isDir(targetFilePath)==0)
 			{
-				//1=file
-				//0=dir
-				
+				//1=file   0=dir
 				flag=0;
 				
 				strcat(targetFilePath, file_name);
@@ -398,103 +426,135 @@ int get(int uid,char *targetFilePath,char * uid_f)
 				else
 				{
 					fd = open(targetFilePath, O_RDWR | O_CREAT);
-					for(i = 0; i < NUM_DATA ; ++i)
-					{
-						sprintf(directory, DIRECTORY_PATH"folder%d%c", i, '\0');
-						dirSucc = isDir(directory);
+					for(i = 0; i < (NUM_DATA + NUM_PARITY); ++i)
+					{	
+						printf("Loop %d is running",i);
+						if(i<NUM_DATA){
+							sprintf(directory, DIRECTORY_PATH"folder%d%c", i, '\0');
+						}
+						else{
+							sprintf(directory, DIRECTORY_PATH"parity%d%c", (i-8), '\0');
+						}
 						
+						dirSucc = isDir(directory);
+
+						int canEdit=1;
 						if(dirSucc != 0)
 						{
 							check = mkdir(directory, 0777); 
+							printf("\n\t Failed to create directory!!!");
+							canEdit=0;
 						}
 						if(check != 0)
 						{
 							printf("\n\t Folder creation failed!!!");
-							succ = -1;
+							canEdit=0;
+							// succ = -1;
 						}
 						
-						sprintf(chunk, DIRECTORY_PATH"folder%d/%d_chunk%d.%s%c", i, uid, i, file_extension, '\0');
+
+						hash_ChunkRegen = (char*) calloc(40, sizeof(char)); 
+						memset(hash_ChunkRegen,'\0',sizeof(hash_ChunkRegen));
+						hash_ChunkOriginal = (char*) calloc(40, sizeof(char)); 
+						memset(hash_ChunkOriginal,'\0',sizeof(hash_ChunkOriginal));
+
+						if(i<NUM_DATA){
+							sprintf(chunk, DIRECTORY_PATH"folder%d/%d_chunk%d.%s%c", i, uid, i, file_extension, '\0');
+						}
+						else{
+							sprintf(chunk, DIRECTORY_PATH"parity%d/%d_parity%d.%s%c", i-8, uid, i-8, file_extension, '\0');
+						}
+						
 						fchunk = fopen(chunk, "r") ;
-
 						if(fchunk == NULL)
-						{
-							availableChunks[i] = 0 ;	
-						}
+						{	
+							printf("Fchunk is null\n\n");
+							availableChunks[i]=0;
+							canEdit=0;
+							// if(container_index[i]==1){
+							// 	printf("\n\nDebugging containers\n\n");
+							// 	write(fd,container[i],chunk_size);
+							// 	availableChunks[i]=1;
+							// }
+							// else{
+							// 	printf("\nDebugging wheather fchunk is null\n");
+							// 	availableChunks[i] = 0 ;
+							// }
+								// fclose(fchunk); 
+								// fchunk = NULL ;
+						} 
 						else
-						{
+						{	
 							
+									
+							printf("Fchunk is not null\n\n");
 							fch = open(chunk, O_RDONLY | O_CREAT);
-
-							read(fch, buff, chunk_size);
-							write(fd, buff, chunk_size);
+							if(i<NUM_DATA){
+								
+								read(fch, buff, chunk_size);
+								write(fd, buff, chunk_size);
+								printf("writing chunk file data:\t");
+								for(int i=0;i<chunk_size;i++){
+									printf("%c",buff[i]);
+								}
+								printf("\n");
+							}
 							
-							
-						
-							hash_ChunkRegen = (char*) calloc(40, sizeof(char)); 
-							memset(hash_ChunkRegen,'\0',sizeof(hash_ChunkRegen));
-							hash_ChunkOriginal = (char*) calloc(40, sizeof(char)); 
-							memset(hash_ChunkOriginal,'\0',sizeof(hash_ChunkOriginal));
 							calChecksum(chunk,hash_ChunkRegen);
-							
-				        		(i==0)?(hash_ChunkOriginal=d.hash_folder0):(hash_ChunkOriginal=hash_ChunkOriginal);
-				        		(i==1)?(hash_ChunkOriginal=d.hash_folder1):(hash_ChunkOriginal=hash_ChunkOriginal);
-				        		(i==2)?(hash_ChunkOriginal=d.hash_folder2):(hash_ChunkOriginal=hash_ChunkOriginal);
-				        		(i==3)?(hash_ChunkOriginal=d.hash_folder3):(hash_ChunkOriginal=hash_ChunkOriginal);
-				        		(i==4)?(hash_ChunkOriginal=d.hash_folder4):(hash_ChunkOriginal=hash_ChunkOriginal);
-				        		(i==5)?(hash_ChunkOriginal=d.hash_folder5):(hash_ChunkOriginal=hash_ChunkOriginal);
-				        		(i==6)?(hash_ChunkOriginal=d.hash_folder6):(hash_ChunkOriginal=hash_ChunkOriginal);
-				        		(i==7)?(hash_ChunkOriginal=d.hash_folder7):(hash_ChunkOriginal=hash_ChunkOriginal);
-				        		if(strcmp(hash_ChunkRegen,hash_ChunkOriginal)==0){
-				        			availableChunks[i] = 1 ;
-				        		}	
-				        		else{
-				        		//chunk hashes not equal
-				        			availableChunks[i]=0 ;
-				        		}
+
 							close(fch);
 							fclose(fchunk); 
 							fchunk = NULL ;
 						}
+						
+						(i==0)?(hash_ChunkOriginal=d.hash_folder0):(hash_ChunkOriginal=hash_ChunkOriginal);
+						(i==1)?(hash_ChunkOriginal=d.hash_folder1):(hash_ChunkOriginal=hash_ChunkOriginal);
+						(i==2)?(hash_ChunkOriginal=d.hash_folder2):(hash_ChunkOriginal=hash_ChunkOriginal);
+						(i==3)?(hash_ChunkOriginal=d.hash_folder3):(hash_ChunkOriginal=hash_ChunkOriginal);
+						(i==4)?(hash_ChunkOriginal=d.hash_folder4):(hash_ChunkOriginal=hash_ChunkOriginal);
+						(i==5)?(hash_ChunkOriginal=d.hash_folder5):(hash_ChunkOriginal=hash_ChunkOriginal);
+						(i==6)?(hash_ChunkOriginal=d.hash_folder6):(hash_ChunkOriginal=hash_ChunkOriginal);
+						(i==7)?(hash_ChunkOriginal=d.hash_folder7):(hash_ChunkOriginal=hash_ChunkOriginal);
+
+						(i==8)?(hash_ChunkOriginal=d.hash_parity0):"";
+						(i==9)?(hash_ChunkOriginal=d.hash_parity1):"";
+						(i==10)?(hash_ChunkOriginal=d.hash_parity2):"";
+
+						if(strcmp(hash_ChunkRegen,hash_ChunkOriginal)==0){
+							availableChunks[i] = 1 ;
+						}	
+						else{
+						//chunk hashes not equal
+							availableChunks[i]=0 ;
+							canEdit = 0;
+						}
+						
+						if(canEdit==0){
+							if(container_index[i]==1){
+								// unsigned char * tempp = (unsigned char*)container[i];
+								// printf("%"container[i]);
+								unsigned char* data_to_write = container[i];
+								for(int ii=0;ii<chunk_size;ii++){
+									printf("%c",container[i][ii]);
+								}
+								printf("\n");
+									
+								write(fd,data_to_write,chunk_size);
+								availableChunks[i]=1;
+							}
+							else{
+								availableChunks[i]=0;
+							}
+						}
+						
+
 					}
 					
-					for(i=0 ; i<NUM_PARITY ; ++i)
-					{
-						sprintf(chunk, DIRECTORY_PATH"parity%d/%d_parity%d.%s%c", i, uid, i, file_extension, '\0');
-						fchunk = fopen(chunk, "r") ;
-
-						if(fchunk == NULL)
-						{
-							availableChunks[i+NUM_DATA] = 0;
-						}
-						else
-						{
-							
-		
-							hash_ChunkRegen = (char*) calloc(40, sizeof(char)); 
-							memset(hash_ChunkRegen,'\0',sizeof(hash_ChunkRegen));
-							hash_ChunkOriginal = (char*) calloc(40, sizeof(char)); 
-							memset(hash_ChunkOriginal,'\0',sizeof(hash_ChunkOriginal));
-							calChecksum(chunk,hash_ChunkRegen);
-							
-							(i==0)?(hash_ChunkOriginal=d.hash_parity0):"";
-				        		(i==1)?(hash_ChunkOriginal=d.hash_parity1):"";
-				        		(i==2)?(hash_ChunkOriginal=d.hash_parity2):"";
-				        		
-				        		if(strcmp(hash_ChunkRegen,hash_ChunkOriginal)==0){
-				        			availableChunks[i+NUM_DATA] = 1;
-				        		}
-				        		else{
-				        		    availableChunks[i+NUM_DATA] = 0;
-						
-				   	    		}
-							fclose(fchunk);
-							fchunk = NULL ;		
-						}
-					}
 					
 					close(fd);
 					fclose(ft) ;
 					ft = NULL ;
+					
 				}
 				
 				//available buffs memory allocation for data chunks
@@ -505,15 +565,22 @@ int get(int uid,char *targetFilePath,char * uid_f)
 				
 				//Code to populate the available_buffs 
 				j = 0;
-				for(i=0 ; i<NUM_DATA ; ++i)
-				{
+				for(i=0 ; i<(NUM_DATA + NUM_PARITY) ; ++i)
+				{	printf("\n Loop no %d\n",i);
+					
 					if(availableChunks[i] == 1)
-					{
-						sprintf(chunk, DIRECTORY_PATH"folder%d/%d_chunk%d.%s%c", i, uid, i, file_extension, '\0');	
+					{	
+						if(i<NUM_DATA){
+							sprintf(chunk, DIRECTORY_PATH"folder%d/%d_chunk%d.%s%c", i, uid, i, file_extension, '\0');
+						}
+						else{
+							sprintf(chunk, DIRECTORY_PATH"parity%d/%d_parity%d.%s%c", i-8, uid, i-8, file_extension, '\0');
+						}
+							
 						fchunk = fopen(chunk, "r") ;
 						if(fchunk == NULL)
 						{
-							printf("\n\tData file could not be opened");	
+							printf("\n\tData file of chunk %dcould not be opened",i);	
 						}
 						else
 						{
@@ -521,43 +588,17 @@ int get(int uid,char *targetFilePath,char * uid_f)
 							read(fch, buff, chunk_size);
 							memcpy(available_buffs[j], buff, chunk_size);
 							j++;
-
+							
 							close(fch);
 							fclose(fchunk);
-							fchunk = NULL;
-						}		
-					}			
-				}
-				
-				for(i=0 ; i<NUM_PARITY ; ++i)
-				{
-					if(availableChunks[i + NUM_DATA] == 1)
-					{
-						sprintf(chunk, DIRECTORY_PATH"parity%d/%d_parity%d.%s%c", i, uid, i, file_extension, '\0');	
-						fchunk = fopen(chunk, "r") ;
-						if(fchunk == NULL)
-						{
-							printf("\n\tData file could not be opened");	
+							
 						}
-						else
-						{
-							fch = open(chunk, O_RDONLY| O_CREAT);
-							read(fch, buff, chunk_size);
-							if(j < NUM_DATA)
-							{ 
-								memcpy(available_buffs[j], buff, chunk_size);
-								j++;
-							}
-
-							close(fch);
-							fclose(fchunk);
-							fchunk = NULL;	
-						}		
-					}			
+								
+					}	
+							
 				}
-				
-				
-				//calclating missing chunks
+								
+				//calculating missing chunks
 				for(i = 0; i < NUM_DATA; ++i)
 				{
 					if(availableChunks[i] == 0)
@@ -612,8 +653,8 @@ int get(int uid,char *targetFilePath,char * uid_f)
 							}
 							printf("%d \t", gen[i]);
 						}
-
-						for(i = 0, k = 0 ; i < (NUM_DATA + NUM_PARITY) ; ++i)
+						k=0;
+						for(i = 0 ; i < (NUM_DATA + NUM_PARITY) ; ++i)
 						{
 							if(availableChunks[i] == 1)
 							{
@@ -625,22 +666,11 @@ int get(int uid,char *targetFilePath,char * uid_f)
 							}
 						}
 						
-						i = NUM_DATA;
-						while(k < NUM_DATA)
-						{
-							for(j = 0 ; j < NUM_DATA ; ++j)
-							{
-								recovery[(k * NUM_DATA) + j] = gen[(i * NUM_DATA) + j];
-							}
-							k++;
-							i++;
-						}
-
 						printf("\n\n\tRecovery Matrix : ");
-						for(i = 0 ; i < (NUM_DATA) * NUM_DATA ; ++i)
+						for(i = 0 ; i < (k) * NUM_DATA ; ++i)
 						{
 							if(i % NUM_DATA == 0)
-							{
+							{ 
 								printf("\n\t");
 							}
 							printf("%d \t", recovery[i]);
@@ -649,7 +679,16 @@ int get(int uid,char *targetFilePath,char * uid_f)
 						gf_invert_matrix(recovery, decode, NUM_DATA);
 
 						printf("\n\n\tDecode Matrix (Inverse of recovery matrix) : ");
-						for(i = 0, j = 0 ; i < (NUM_DATA * NUM_DATA) && (j < NUM_DATA * NUM_DATA) ; ++i)
+						for(i = 0; i < (k * NUM_DATA) ; ++i)
+						{
+							if(i % NUM_DATA == 0)
+							{
+								printf("\n\t");
+							}
+							printf("%d \t", decode[i]);
+						}
+						printf("\n\n Debugging Decode Matrix : ");
+						for(i = 0; i < (k * NUM_DATA) ; ++i)
 						{
 							if(i % NUM_DATA == 0)
 							{
@@ -707,7 +746,29 @@ int get(int uid,char *targetFilePath,char * uid_f)
 						    		
 								if(fchunk == NULL)
 								{
-									printf("\n\tMissing data file %d could not be created!", i);
+									printf("\n\tMissing data file %d could not be created! \n\n", i);
+
+
+									// add a variable which will store the temp_buff for this missing/corrupted file
+									// do available_chunks = 1 so it will be verified in the second iteration of get function call
+									// How the data can be stored and passed on to get function???
+									// availableChunks[i]=1;
+
+									
+									printf("before\n");
+									container_index[i]=1;
+									container[i]=temp_buffs[j];
+
+									printf("Container data:\t");
+									for(int ii=0;ii<chunk_size;ii++){
+										printf("%c",container[i][ii]);
+									}
+									printf("\n");
+
+									printf("after \n\n");
+									j++;
+									// fclose(fchunk);
+									// fchunk = NULL ;
 								}
 								else
 								{
@@ -722,15 +783,10 @@ int get(int uid,char *targetFilePath,char * uid_f)
 							}
 						}
 
-						/*printf("\n\t Temp buffs : ");
-						for(i = 0 ; i < missingChunks ; i++)
-						{
-							printf("\n\t Temp_buff[%d] : %s", i, temp_buffs[i]);
-						}*/
-
+				
 						flag2 = 1 ;
 						strcpy(targetFilePath, targetPath_old);	
-						succ = get(uid,targetFilePath,uid_f);
+						succ = get(uid,targetFilePath,uid_f,container_index,container);
 
 					}
 
@@ -1046,7 +1102,7 @@ int put(struct Node **arr,char file_path[100])
 		        
 		        
 		        
-		        
+		     /*   
 		        
 		        //inserting into mysql demo table
 		        MYSQL *conn;
@@ -1078,7 +1134,7 @@ int put(struct Node **arr,char file_path[100])
                             return 1;
                         }
                         mysql_close(conn);
-		        
+		        */
 		        
 		        
 		        
@@ -1166,6 +1222,45 @@ int putHash(struct Node **arr,int uid,char filepath[100],int file_size, char *ha
 	return 0;
 }
 
+// void calChecksumArray(unsigned char arr[], size_t size,char checksum[]) {
+//     // Create a temporary file to store the array
+//     FILE *tmpFile = tmpfile();
+//     if (tmpFile == NULL) {
+//         perror("Error creating temporary file");
+//         return;
+//     }
+
+//     // Write the array to the temporary file
+//     fwrite(arr, sizeof(unsigned char), size, tmpFile);
+
+//     // Move the file pointer to the beginning of the file
+//     rewind(tmpFile);
+
+//     Use cksum command on the temporary file
+//     int result = system("cksum - < /dev/fd/3");
+//     if (result == -1) {
+//         perror("Error executing cksum");
+//     }
+
+// 	// strcpy(command, "cksum ");
+// 	// strcat(command, tmpFile);
+//  	// FILE *ls = popen(command, "r");
+ 	
+//  	// while(fread(&result[i], sizeof(result[i]), 1, ls))
+//  	// {
+//  	// 	i++;
+//  	// }
+ 	
+//  	// for(j=0; result[j] != ' '; j++)
+//     //     {
+//     //     	checksum[k] = result[j];
+//     //     	k++;
+//     //     }
+
+
+//     // Close the temporary file
+//     fclose(tmpFile);
+// }
 
 void calChecksum(char file_path[], char checksum[])
 {
