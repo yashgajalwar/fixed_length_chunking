@@ -434,7 +434,7 @@ int get(int uid,char *targetFilePath,char * uid_f,int *container_index,unsigned 
                         else{
                             sprintf(chunk, DIRECTORY_PATH"parity%d/%d_parity%d.%s%c", (i-8), uid, (i-8), file_extension, '\0');
                         }
-						fchunk = fopen(chunk, "r") ;
+						fchunk = fopen(chunk, "r");
 						if(fchunk == NULL)
 						{   
                             // have to check checksum values if available chunk is regenerated
@@ -458,8 +458,8 @@ int get(int uid,char *targetFilePath,char * uid_f,int *container_index,unsigned 
 								{
 									write(fd,data_from_map,chunk_size);		
 								}
-
 								availableChunks[i]=1;
+
 							}
 							else
 							{ 
@@ -754,6 +754,8 @@ int get(int uid,char *targetFilePath,char * uid_f,int *container_index,unsigned 
 							if(fchunk == NULL)
 							{
 								printf("\n\tParity file could not be created!");
+								insert(&myMap,i+8,paritybuffs[i],chunk_size);
+								container_index[i+8]=1;
 							}
 							else
 							{
@@ -915,7 +917,7 @@ int put(struct Node **arr,char file_path[100])
 			sprintf(directory, DIRECTORY_PATH"folder%d%c", i, '\0');
 			dirSucc = isDir(directory);
 			if(dirSucc != 0)// directory path doesn't exist.
-			{       // creating a folder along the 'directory' path.
+			{   // creating a folder along the 'directory' path.
 				check = mkdir(directory, 0777); 
 			}
 			if(check != 0)// validating the folder creation
@@ -930,12 +932,18 @@ int put(struct Node **arr,char file_path[100])
 			if(fchunk == NULL)// validating if chunk is created successfully
 			{
 				printf("\n\tChunk file could not be created!");
+				// if folder is missing we will proceed without saving data into folder
+				// but to calculate parities we need data chunks to be filled.
+				read(fd, databuffs, chunk_size);
+				memcpy(datachunks[i], databuffs, chunk_size);
+				// lseek(fd,chunk_size,SEEK_CUR);
+				
 			}
 			else
 			{
 				// opening 'file_chunk' 
 				fch = open(file_chunk, O_WRONLY | O_CREAT);
-									// copying data from data file to chunks.
+				// copying data from data file to chunks.
 				read(fd, databuffs, chunk_size);
 				write(fch, databuffs, chunk_size);
 				
