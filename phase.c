@@ -13,11 +13,17 @@ Implementing Object Storage-Put,Get,List
 #include <fcntl.h>
 #include <openssl/md5.h>
 #include "/home/yashgajalwar/Desktop/erasure/isa-l-master/include/erasure_code.h"
+#include <mysql/mysql.h>
 
 #define NUM_DATA 8
 #define NUM_PARITY 3
 #define BUCKETSIZE 5
 #define DIRECTORY_PATH "/home/yashgajalwar/Desktop/erasure/test/"
+#define SERVER "localhost"
+#define USER "root"
+#define PASSWORD "root"
+#define DATABASE "erasure_demo"
+
 
 
 struct KeyValue {
@@ -82,6 +88,7 @@ int count=0;
 void calChecksumArray(unsigned char arr[], size_t size,char checksum[]);
 void insert(struct Map *mapp, int keyy, unsigned char* valuee,int chunk_size);
 void searchMap(struct Map *myMap,int keyy,unsigned char* data_from_map,int chunk_size);
+int addARecord_Db(struct uid_filemap);
 
 struct Map myMap;
 
@@ -1025,6 +1032,69 @@ int put(struct Node **arr,char file_path[100])
 		//addARecord_uid - function to create a binary file to store the hash checksum of file chunked,
 		// chunk data files, chunk parity files,file_path.
 		addARecord_uid(a);
+
+		// MYSQL *conn = mysql_init(NULL);	
+		// if (conn == NULL) {
+		// 	fprintf(stderr, "mysql_init() failed\n");
+		// 	exit(1);
+		// }
+		// if (mysql_real_connect(conn, SERVER, USER, PASSWORD, DATABASE, 0, NULL, 0) == NULL) {
+		// 	fprintf(stderr, "mysql_real_connect() failed: %s\n", mysql_error(conn));
+		// 	mysql_close(conn);
+		// 	exit(1);
+		// }
+		// MYSQL_STMT *stmt;
+		// stmt = mysql_stmt_init(conn);
+		// if (!stmt) {
+		// 	fprintf(stderr, "mysql_stmt_init(), out of memory\n");
+		// 	exit(1);
+    	// }
+		// char query[500];
+		// snprintf(query, sizeof(query), "INSERT INTO tb2 (uid, filename, size) VALUES (%d, %s, %ld)", a.uid,a.filename,a.size);
+		// if (mysql_query(conn, query)) {
+		// 	fprintf(stderr, "mysql_query() failed in Put function\n");
+		// 	mysql_close(conn);
+		// 	exit(1);
+		// }
+		// mysql_close(conn);
+
+		
+	// 	MYSQL *conn;
+	// 	MYSQL_RES *res;
+	// 	MYSQL_ROW row;
+
+	// 	conn = mysql_init(NULL);
+	// 	if (conn == NULL) {
+	// 		fprintf(stderr, "mysql_init() failed\n");
+	// 		return 1;
+	// 	}
+
+	// 	if (mysql_real_connect(conn, SERVER, USER, PASSWORD, DATABASE, 0, NULL, 0) == NULL) {
+	// 		fprintf(stderr, "mysql_real_connect() failed\n");
+	// 		mysql_close(conn);
+	// 		return 1;
+	// 	}
+	// 	char query[1024]; 
+	// 	sprintf(query,"INSERT INTO tb1 (uid, filename, size, filepath, hashOriginalFile, hash_folder0, hash_folder1, hash_folder2, hash_folder3, hash_folder4, hash_folder5, hash_folder6, hash_folder7, hash_parity0, hash_parity1, hash_parity2, padding) VALUES (%d, '%s', 1024, '/path/to/example.txt', 'original_hash', 'folder0_hash', 'folder1_hash', 'folder2_hash', 'folder3_hash', 'folder4_hash', 'folder5_hash', 'folder6_hash', 'folder7_hash', 'parity0_hash', 'parity1_hash', 'parity2_hash', 0)",uid,a.filename);
+	// 	if (mysql_query(conn, query) != 0) {
+    //     	fprintf(stderr, "mysql_query() failed (333): %s\n", mysql_error(conn));
+	// 		mysql_close(conn);
+	// 		return 1;
+	// 	}
+
+
+	// 	// if (mysql_query(conn, ("INSERT INTO tb1 (uid, filename, size, filepath, hashOriginalFile, hash_folder0, hash_folder1, hash_folder2, hash_folder3, hash_folder4, hash_folder5, hash_folder6, hash_folder7, hash_parity0, hash_parity1, hash_parity2, padding) VALUES (%d, 'example.txt', 1024, '/path/to/example.txt', 'original_hash', 'folder0_hash', 'folder1_hash', 'folder2_hash', 'folder3_hash', 'folder4_hash', 'folder5_hash', 'folder6_hash', 'folder7_hash', 'parity0_hash', 'parity1_hash', 'parity2_hash', 0)")) != 0) {
+	// 	// 	fprintf(stderr, "mysql_query() failed: %s\n", mysql_error(conn));
+	// 	// 	mysql_close(conn);
+	// 	// 	return 1;
+	// 	// }
+
+    // printf("Data inserted successfully!\n");
+
+    // mysql_close(conn);
+
+		addARecord_Db(a);
+		
 		close(fd);
 		fclose(fp);
 		fp = NULL;
@@ -1295,6 +1365,37 @@ int addARecord_uid(struct uid_filemap s)
 		fin=NULL;
 	}
 	return flag;
+}
+
+int addARecord_Db(struct uid_filemap s)
+{
+	MYSQL *conn;
+		MYSQL_RES *res;
+		MYSQL_ROW row;
+
+		conn = mysql_init(NULL);
+		if (conn == NULL) {
+			fprintf(stderr, "mysql_init() failed\n");
+			return 1;
+		}
+
+		if (mysql_real_connect(conn, SERVER, USER, PASSWORD, DATABASE, 0, NULL, 0) == NULL) {
+			fprintf(stderr, "mysql_real_connect() failed\n");
+			mysql_close(conn);
+			return 1;
+		}
+		char query[1024]; 
+		sprintf(query,"INSERT INTO tb1 (uid, filename, size, filepath, hashOriginalFile, hash_folder0, hash_folder1, hash_folder2, hash_folder3, hash_folder4, hash_folder5, hash_folder6, hash_folder7, hash_parity0, hash_parity1, hash_parity2, padding) VALUES (%d, '%s', 1024, '/path/to/example.txt', 'original_hash', 'folder0_hash', 'folder1_hash', 'folder2_hash', 'folder3_hash', 'folder4_hash', 'folder5_hash', 'folder6_hash', 'folder7_hash', 'parity0_hash', 'parity1_hash', 'parity2_hash', 0)",s.uid,s.filename);
+		if (mysql_query(conn, query) != 0) {
+        	fprintf(stderr, "mysql_query() failed (555): %s\n", mysql_error(conn));
+			mysql_close(conn);
+			return 1;
+		}
+		printf("Data inserted successfully!\n");
+
+    mysql_close(conn);
+
+
 }
 
 int search(char * filename, struct uid_filemap * res)
