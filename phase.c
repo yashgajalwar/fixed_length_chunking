@@ -89,6 +89,9 @@ void calChecksumArray(unsigned char arr[], size_t size,char checksum[]);
 void insert(struct Map *mapp, int keyy, unsigned char* valuee,int chunk_size);
 void searchMap(struct Map *myMap,int keyy,unsigned char* data_from_map,int chunk_size);
 int addARecord_Db(struct uid_filemap);
+int delete_Db(int);
+void list_Db();
+int search_Db(int uid,struct uid_filemap *);
 
 struct Map myMap;
 
@@ -134,7 +137,7 @@ int main(void)
 		strcpy(choice,"\0");
 		menu(choice);
         
-		if(choice[0]=='P'||choice[0]=='p'||choice[0]=='G'||choice[0]=='g')
+		if(choice[0]=='P'||choice[0]=='p'||choice[0]=='G'||choice[0]=='g' || choice[0]=='D'||choice[0]=='d')
 		{
 			for(i=0;choice[i]!=' ';i++)
 			{
@@ -255,8 +258,19 @@ int main(void)
 		{
 			printf("\n\tListing the objects : ");
 			// list(arr);
-			list();
+			list_Db();
+			// list();
 			
+		}
+		else if(strcasecmp(currentstring,"Delete")==0){
+			char uid_f[50]="\0";			
+			for(j=i+1,m=0;choice[j]!=' ';j++,m++)
+			{
+				uid_f[m]=choice[j];	
+			}
+			sscanf(uid_f,"%d",&uid);
+			printf("In delete menu \n\n");
+			delete_Db(uid);
 		}
 		strcpy(currentstring,"\0");
 		
@@ -284,7 +298,8 @@ void menu(char choice[100])
         printf("\n\t1. Type 'put' and path of file for creating an Object");
         printf("\n\t2. Type 'get', UID and path of target directory for getting an Object");
         printf("\n\t3. Type 'list' for getting the list of all objects in object storage");
-        printf("\n\t4. 'exit'\n");
+		printf("\n\t4. Type 'delete' and UID for deleting a row from database ");
+        printf("\n\t5. 'exit'\n");
 	printf("\n\t>> ");
 	setbuf(stdin,NULL);
 	scanf("%[^\n]%*c", choice);
@@ -347,7 +362,9 @@ int get(int uid,char *targetFilePath,char * uid_f,int *container_index,unsigned 
 		marr[i] = -1 ;
 	}	
 	struct uid_filemap d;
-	flag = search(uid_f,&d);
+
+	flag = search_Db(uid,&d);
+	// flag = search(uid_f,&d);
 	file_size = d.size;
 	strcpy(file_path , d.filepath);
 	hash_OriginalFile = d.hash_OriginalFile;
@@ -1032,67 +1049,6 @@ int put(struct Node **arr,char file_path[100])
 		//addARecord_uid - function to create a binary file to store the hash checksum of file chunked,
 		// chunk data files, chunk parity files,file_path.
 		addARecord_uid(a);
-
-		// MYSQL *conn = mysql_init(NULL);	
-		// if (conn == NULL) {
-		// 	fprintf(stderr, "mysql_init() failed\n");
-		// 	exit(1);
-		// }
-		// if (mysql_real_connect(conn, SERVER, USER, PASSWORD, DATABASE, 0, NULL, 0) == NULL) {
-		// 	fprintf(stderr, "mysql_real_connect() failed: %s\n", mysql_error(conn));
-		// 	mysql_close(conn);
-		// 	exit(1);
-		// }
-		// MYSQL_STMT *stmt;
-		// stmt = mysql_stmt_init(conn);
-		// if (!stmt) {
-		// 	fprintf(stderr, "mysql_stmt_init(), out of memory\n");
-		// 	exit(1);
-    	// }
-		// char query[500];
-		// snprintf(query, sizeof(query), "INSERT INTO tb2 (uid, filename, size) VALUES (%d, %s, %ld)", a.uid,a.filename,a.size);
-		// if (mysql_query(conn, query)) {
-		// 	fprintf(stderr, "mysql_query() failed in Put function\n");
-		// 	mysql_close(conn);
-		// 	exit(1);
-		// }
-		// mysql_close(conn);
-
-		
-	// 	MYSQL *conn;
-	// 	MYSQL_RES *res;
-	// 	MYSQL_ROW row;
-
-	// 	conn = mysql_init(NULL);
-	// 	if (conn == NULL) {
-	// 		fprintf(stderr, "mysql_init() failed\n");
-	// 		return 1;
-	// 	}
-
-	// 	if (mysql_real_connect(conn, SERVER, USER, PASSWORD, DATABASE, 0, NULL, 0) == NULL) {
-	// 		fprintf(stderr, "mysql_real_connect() failed\n");
-	// 		mysql_close(conn);
-	// 		return 1;
-	// 	}
-	// 	char query[1024]; 
-	// 	sprintf(query,"INSERT INTO tb1 (uid, filename, size, filepath, hashOriginalFile, hash_folder0, hash_folder1, hash_folder2, hash_folder3, hash_folder4, hash_folder5, hash_folder6, hash_folder7, hash_parity0, hash_parity1, hash_parity2, padding) VALUES (%d, '%s', 1024, '/path/to/example.txt', 'original_hash', 'folder0_hash', 'folder1_hash', 'folder2_hash', 'folder3_hash', 'folder4_hash', 'folder5_hash', 'folder6_hash', 'folder7_hash', 'parity0_hash', 'parity1_hash', 'parity2_hash', 0)",uid,a.filename);
-	// 	if (mysql_query(conn, query) != 0) {
-    //     	fprintf(stderr, "mysql_query() failed (333): %s\n", mysql_error(conn));
-	// 		mysql_close(conn);
-	// 		return 1;
-	// 	}
-
-
-	// 	// if (mysql_query(conn, ("INSERT INTO tb1 (uid, filename, size, filepath, hashOriginalFile, hash_folder0, hash_folder1, hash_folder2, hash_folder3, hash_folder4, hash_folder5, hash_folder6, hash_folder7, hash_parity0, hash_parity1, hash_parity2, padding) VALUES (%d, 'example.txt', 1024, '/path/to/example.txt', 'original_hash', 'folder0_hash', 'folder1_hash', 'folder2_hash', 'folder3_hash', 'folder4_hash', 'folder5_hash', 'folder6_hash', 'folder7_hash', 'parity0_hash', 'parity1_hash', 'parity2_hash', 0)")) != 0) {
-	// 	// 	fprintf(stderr, "mysql_query() failed: %s\n", mysql_error(conn));
-	// 	// 	mysql_close(conn);
-	// 	// 	return 1;
-	// 	// }
-
-    // printf("Data inserted successfully!\n");
-
-    // mysql_close(conn);
-
 		addARecord_Db(a);
 		
 		close(fd);
@@ -1385,7 +1341,7 @@ int addARecord_Db(struct uid_filemap s)
 			return 1;
 		}
 		char query[1024]; 
-		sprintf(query,"INSERT INTO tb1 (uid, filename, size, filepath, hashOriginalFile, hash_folder0, hash_folder1, hash_folder2, hash_folder3, hash_folder4, hash_folder5, hash_folder6, hash_folder7, hash_parity0, hash_parity1, hash_parity2, padding) VALUES (%d, '%s', 1024, '/path/to/example.txt', 'original_hash', 'folder0_hash', 'folder1_hash', 'folder2_hash', 'folder3_hash', 'folder4_hash', 'folder5_hash', 'folder6_hash', 'folder7_hash', 'parity0_hash', 'parity1_hash', 'parity2_hash', 0)",s.uid,s.filename);
+		sprintf(query,"INSERT INTO tb1 (uid, filename, size, filepath, hashOriginalFile, hash_folder0, hash_folder1, hash_folder2, hash_folder3, hash_folder4, hash_folder5, hash_folder6, hash_folder7, hash_parity0, hash_parity1, hash_parity2, padding) VALUES (%d, '%s', %ld, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d)",s.uid,s.filename,s.size,s.filepath,s.hash_OriginalFile,s.hash_folder0,s.hash_folder1,s.hash_folder2,s.hash_folder3,s.hash_folder4,s.hash_folder5,s.hash_folder6,s.hash_folder7,s.hash_parity0,s.hash_parity1,s.hash_parity2,s.padding);
 		if (mysql_query(conn, query) != 0) {
         	fprintf(stderr, "mysql_query() failed (555): %s\n", mysql_error(conn));
 			mysql_close(conn);
@@ -1395,6 +1351,187 @@ int addARecord_Db(struct uid_filemap s)
 
     mysql_close(conn);
 
+
+}
+
+int delete_Db(int uid){
+	printf("In delete function\n\n");
+	MYSQL *conn;
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    // Initialize connection handler
+    conn = mysql_init(NULL);
+	if (conn == NULL) {
+		fprintf(stderr, "mysql_init() failed\n");
+		return 1;
+	}
+
+
+    // Connect to the MySQL server
+    if (mysql_real_connect(conn, SERVER, USER, PASSWORD, DATABASE, 0, NULL, 0)==NULL) {
+        // fprintf(stderr, "Failed to connect to database: Error: %s\n", mysql_error(conn));
+		fprintf(stderr, "mysql_real_connect() failed\n");
+        mysql_close(conn);
+        return 1;
+    }
+
+    // Formulate the delete query
+    char query[100];
+    sprintf(query, "DELETE FROM tb1 WHERE uid = %d",uid);
+
+    // Execute the delete query
+    if (mysql_query(conn, query)) {
+        fprintf(stderr, "Failed to execute query: Error: %s\n", mysql_error(conn));
+        mysql_close(conn);
+        return 1;
+    }
+
+    printf("Deleted row with ID: %d\n", uid);
+    // Close connection
+    mysql_close(conn);
+	return 0;
+}
+
+void list_Db(){
+	printf("In List function\n\n");
+	MYSQL *conn;
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    // Initialize connection handler
+    conn = mysql_init(NULL);
+	if (conn == NULL) {
+		fprintf(stderr, "mysql_init() failed\n");
+		return;
+	}
+
+
+    // Connect to the MySQL server
+    if (mysql_real_connect(conn, SERVER, USER, PASSWORD, DATABASE, 0, NULL, 0)==NULL) {
+        // fprintf(stderr, "Failed to connect to database: Error: %s\n", mysql_error(conn));
+		fprintf(stderr, "mysql_real_connect() failed\n");
+        mysql_close(conn);
+        return ;
+    }
+
+    // Formulate the delete query
+    char query[100];
+    sprintf(query, "SELECT * FROM tb1");
+
+    // Execute the delete query
+    if (mysql_query(conn, query)) {
+        fprintf(stderr, "Failed to execute query: Error: %s\n", mysql_error(conn));
+        mysql_close(conn);
+        return;
+    }
+	 // Store result set
+    res = mysql_store_result(conn);
+
+    // Check if result set is empty
+    if (res == NULL) {
+        fprintf(stderr, "No data returned.\n");
+        mysql_close(conn);
+        return;
+    }
+
+    // Iterate through result set and print rows
+    while ((row = mysql_fetch_row(res))) {
+        for (int i = 0; i < mysql_num_fields(res); i++) {
+            printf("%s ", row[i] ? row[i] : "NULL");
+        }
+        printf("\n");
+    }
+
+    // Free result set
+    mysql_free_result(res);
+
+    
+    // Close connection
+    mysql_close(conn);
+	return;
+}
+
+int search_Db(int uid,struct uid_filemap * d){
+	printf("In search_Db function\n\n");
+	MYSQL *conn;
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    // Initialize connection handler
+    conn = mysql_init(NULL);
+	if (conn == NULL) {
+		fprintf(stderr, "mysql_init() failed\n");
+		return 1;
+	}
+
+
+    // Connect to the MySQL server
+    if (mysql_real_connect(conn, SERVER, USER, PASSWORD, DATABASE, 0, NULL, 0)==NULL) {
+        // fprintf(stderr, "Failed to connect to database: Error: %s\n", mysql_error(conn));
+		fprintf(stderr, "mysql_real_connect() failed\n");
+        mysql_close(conn);
+        return 1;
+    }
+
+    // Formulate the delete query
+    char query[100];
+    sprintf(query, "SELECT * FROM tb1 WHERE uid = %d",uid);
+
+    // Execute the delete query
+    if (mysql_query(conn, query)) {
+        fprintf(stderr, "Failed to execute query: Error: %s\n", mysql_error(conn));
+        mysql_close(conn);
+        return 1;
+    }
+	res = mysql_store_result(conn);
+
+    // Check if result set is empty
+    if (res == NULL) {
+        fprintf(stderr, "No data returned.\n");
+        mysql_close(conn);
+        return 1;
+    }
+
+    // Fetch the row if it exists
+    if ((row = mysql_fetch_row(res))) {
+        // Store attributes into struct
+        sscanf(row[0], "%d", &d->uid); // Assuming id is the first column
+        sscanf(row[1], "%s", d->filename);
+		sscanf(row[2], "%ld", &d->size);
+		sscanf(row[3], "%s", d->filepath);
+		sscanf(row[4], "%s", d->hash_OriginalFile);
+		sscanf(row[5], "%s", d->hash_folder0);
+		sscanf(row[6], "%s", d->hash_folder1);
+		sscanf(row[7], "%s", d->hash_folder2);
+		sscanf(row[8], "%s", d->hash_folder3);
+		sscanf(row[9], "%s", d->hash_folder4);
+		sscanf(row[10], "%s", d->hash_folder5);
+		sscanf(row[11], "%s", d->hash_folder6);
+		sscanf(row[12], "%s", d->hash_folder7);
+		sscanf(row[13], "%s", d->hash_parity0);
+		sscanf(row[14], "%s", d->hash_parity1);
+		sscanf(row[15], "%s", d->hash_parity2);
+		sscanf(row[16], "%d", &d->padding);
+		 // Assuming name is the second column
+        // Add more fields as needed
+
+        // Print retrieved data
+        printf("ID: %d\n", d->uid);
+        printf("Name: %s\n", d->filename);
+        // Print more fields as needed
+    } else {
+        printf("Record with ID %d not found.\n", uid);
+		return -1;
+    }
+
+    // Free result set
+    mysql_free_result(res);
+
+    // Close connection
+    mysql_close(conn);
+	printf("Search row with ID: %d\n", uid);
+    return 0;
 
 }
 
